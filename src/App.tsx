@@ -75,7 +75,7 @@ function App() {
   };
 
   const processVideo = async () => {
-    if (!videoFile || mosaicAreas.length === 0 || !ffmpeg.isLoaded()) {
+    if (!videoFile || mosaicAreas.length === 0 || !ffmpeg.loaded) {
       alert('Please upload a video and add at least one mosaic area');
       return;
     }
@@ -105,8 +105,8 @@ function App() {
       ]);
 
       // Read output file
-      const outputData = ffmpeg.readFile(outputName);
-      const blob = new Blob([outputData], { type: 'video/mp4' });
+      const outputData = ffmpeg.readFile(outputName) as Uint8Array;
+      const blob = new Blob([new Uint8Array(outputData)], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
       // Trigger download

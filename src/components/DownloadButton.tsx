@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react'
 
-interface DownloadButtonProps {
-  onDownload?: () => void
-}
-
-export function DownloadButton({ onDownload }: DownloadButtonProps) {
+export function DownloadButton() {
   const [hasBlob, setHasBlob] = useState(false)
 
   useEffect(() => {

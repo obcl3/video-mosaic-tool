@@ -3,11 +3,10 @@ import { MosaicArea } from '../types'
 
 interface VideoCanvasProps {
   videoUrl: string
-  videoRef: React.RefObject<HTMLVideoElement | null>
-  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  videoRef: React.RefObject<HTMLVideoElement>
+  canvasRef: React.RefObject<HTMLCanvasElement>
   mosaicAreas: MosaicArea[]
   onAddArea: (area: MosaicArea) => void
-  mosaicSize?: number
 }
 
 export function VideoCanvas({
@@ -16,7 +15,6 @@ export function VideoCanvas({
   canvasRef,
   mosaicAreas,
   onAddArea,
-  mosaicSize,
 }: VideoCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
