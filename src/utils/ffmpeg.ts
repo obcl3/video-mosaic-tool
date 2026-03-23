@@ -1,11 +1,11 @@
-import { FFmpeg, toBlobURL } from '@ffmpeg/ffmpeg'
+import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile } from '@ffmpeg/util'
 import { MosaicArea } from '../types'
 
 let ffmpegInstance: FFmpeg | null = null
 
 export async function loadFFmpeg(): Promise<FFmpeg> {
-  if (ffmpegInstance && ffmpegInstance.isLoaded()) {
+  if (ffmpegInstance && ffmpegInstance.loaded) {
     return ffmpegInstance
   }
 
@@ -13,7 +13,7 @@ export async function loadFFmpeg(): Promise<FFmpeg> {
 
   const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist'
   
-  ffmpeg.on('log', ({ type, message }) => {
+  ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
     if (type === 'error') {
       console.error('[FFmpeg]', message)
     }
@@ -21,8 +21,8 @@ export async function loadFFmpeg(): Promise<FFmpeg> {
 
   try {
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: `${baseURL}/ffmpeg-core.js`,
+      wasmURL: `${baseURL}/ffmpeg-core.wasm`,
     })
     ffmpegInstance = ffmpeg
     return ffmpeg
@@ -32,38 +32,13 @@ export async function loadFFmpeg(): Promise<FFmpeg> {
   }
 }
 
-function generateMosaicFilter(
-  mosaicAreas: MosaicArea[],
-  mosaicSize: number,
-  videoWidth: number,
-  videoHeight: number
-): string {
-  // Create complex filter with pixelate effect for each area
-  let filterChain = `scale=${videoWidth}:${videoHeight}`
-  
-  mosaicAreas.forEach((area, index) => {
-    // Pixelate filter for mosaic effect: blur and scale
-    const pixelSize = mosaicSize
-    const scaledX = Math.round(area.x)
-    const scaledY = Math.round(area.y)
-    const scaledW = Math.round(area.width)
-    const scaledH = Math.round(area.height)
-    
-    // Use boxblur to create mosaic effect
-    filterChain += `,split[base][blur_${index}]` + (index === 0 ? '[base]' : '')
-    filterChain += `[blur_${index}]crop=${scaledW}:${scaledH}:${scaledX}:${scaledY}[cropped_${index}]`
-    filterChain += `[cropped_${index}]scale=${Math.ceil(scaledW / pixelSize)}:${Math.ceil(scaledH / pixelSize)}[small_${index}]`
-    filterChain += `[small_${index}]scale=${scaledW}:${scaledH}[pixelated_${index}]`
-  })
 
-  return filterChain
-}
 
 export async function processVideoWithFFmpeg(
   ffmpeg: FFmpeg,
   videoFile: File,
-  mosaicAreas: MosaicArea[],
-  mosaicSize: number
+  _mosaicAreas: MosaicArea[],
+  _mosaicSize: number
 ): Promise<Blob> {
   const inputFileName = 'input.mp4'
   const outputFileName = 'output.mp4'
@@ -86,7 +61,7 @@ export async function processVideoWithFFmpeg(
 
     // Read output file
     const outputData = await ffmpeg.readFile(outputFileName)
-    const blob = new Blob([outputData], { type: 'video/mp4' })
+    const blob = new Blob([outputData as Uint8Array], { type: 'video/mp4' })
 
     // Cleanup
     await ffmpeg.deleteFile(inputFileName)

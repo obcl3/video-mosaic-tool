@@ -1,126 +1,196 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { VideoUpload } from './components/VideoUpload'
-import { VideoCanvas } from './components/VideoCanvas'
-import { Controls } from './components/Controls'
-import { DownloadButton } from './components/DownloadButton'
-import { SettingsPanel } from './components/SettingsPanel'
-import { useVideoProcessor } from './hooks/useVideoProcessor'
+import { useEffect, useRef, useState } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { toBlobURL } from '@ffmpeg/util';
+import VideoUploader from './components/VideoUploader';
+import VideoPreview from './components/VideoPreview';
+import MosaicControls from './components/MosaicControls';
+import ProcessingStatus from './components/ProcessingStatus';
 
-export default function App() {
-  const [videoFile, setVideoFile] = useState<File | null>(null)
-  const [videoUrl, setVideoUrl] = useState<string>('')
-  const [showSettings, setShowSettings] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  
-  const {
-    mosaicAreas,
-    mosaicSize,
-    setMosaicSize,
-    addMosaicArea,
-    removeMosaicArea,
-    clearMosaicAreas,
-    processVideo,
-    isProcessing,
-    downloadVideo,
-  } = useVideoProcessor(videoRef, canvasRef)
+export interface MosaicArea {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  strength: number;
+}
 
+function App() {
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoURL, setVideoURL] = useState<string>('');
+  const [mosaicAreas, setMosaicAreas] = useState<MosaicArea[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [ffmpeg] = useState(() => new FFmpeg());
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Initialize FFmpeg
   useEffect(() => {
-    return () => {
-      if (videoUrl) URL.revokeObjectURL(videoUrl)
+    const initFFmpeg = async () => {
+      try {
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+      } catch (error) {
+        console.error('Failed to initialize FFmpeg:', error);
+      }
+    };
+
+    initFFmpeg();
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .catch(error => console.error('Service Worker registration failed:', error));
     }
-  }, [videoUrl])
+  }, [ffmpeg]);
 
-  const handleVideoSelect = (file: File) => {
-    setVideoFile(file)
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
-    const url = URL.createObjectURL(file)
-    setVideoUrl(url)
-  }
+  const handleVideoUpload = (file: File) => {
+    setVideoFile(file);
+    const url = URL.createObjectURL(file);
+    setVideoURL(url);
+    setMosaicAreas([]);
+  };
 
-  const handleReset = () => {
-    setVideoFile(null)
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
-    setVideoUrl('')
-    clearMosaicAreas()
-  }
+  const handleAddMosaicArea = (area: Omit<MosaicArea, 'id'>) => {
+    const newArea: MosaicArea = {
+      ...area,
+      id: Date.now().toString(),
+    };
+    setMosaicAreas([...mosaicAreas, newArea]);
+  };
+
+  const handleRemoveMosaicArea = (id: string) => {
+    setMosaicAreas(mosaicAreas.filter(area => area.id !== id));
+  };
+
+  const handleUpdateMosaicArea = (id: string, updates: Partial<MosaicArea>) => {
+    setMosaicAreas(
+      mosaicAreas.map(area =>
+        area.id === id ? { ...area, ...updates } : area
+      )
+    );
+  };
+
+  const processVideo = async () => {
+    if (!videoFile || mosaicAreas.length === 0 || !ffmpeg.isLoaded()) {
+      alert('Please upload a video and add at least one mosaic area');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress(0);
+
+    try {
+      // Write input video to FFmpeg filesystem
+      const inputName = 'input_video.mp4';
+      const outputName = 'output_video.mp4';
+
+      const data = await videoFile.arrayBuffer();
+      ffmpeg.writeFile(inputName, new Uint8Array(data));
+
+      // Build FFmpeg filter string for mosaics
+      const filterComplex = buildMosaicFilter(mosaicAreas);
+
+      // Run FFmpeg
+      await ffmpeg.exec([
+        '-i', inputName,
+        '-vf', filterComplex,
+        '-c:v', 'libx264',
+        '-preset', 'medium',
+        '-c:a', 'aac',
+        outputName,
+      ]);
+
+      // Read output file
+      const outputData = ffmpeg.readFile(outputName);
+      const blob = new Blob([outputData], { type: 'video/mp4' });
+      const url = URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mosaic_${videoFile.name}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Cleanup
+      ffmpeg.deleteFile(inputName);
+      ffmpeg.deleteFile(outputName);
+
+      setProgress(100);
+      setTimeout(() => setIsProcessing(false), 1000);
+    } catch (error) {
+      console.error('Video processing error:', error);
+      alert('Error processing video. Check console for details.');
+      setIsProcessing(false);
+    }
+  };
+
+  const buildMosaicFilter = (areas: MosaicArea[]): string => {
+    // Create mosaic filter for each area
+    let filter = '';
+
+    areas.forEach((area, index) => {
+      const boxblurSize = Math.ceil((area.strength / 100) * 50);
+      if (index === 0) {
+        filter = `[0:v]boxblur=${boxblurSize}:${boxblurSize}=enable='between(x,${area.x},${area.x + area.width})*between(y,${area.y},${area.y + area.height})'[v${index}]`;
+      } else {
+        filter += `;[v${index - 1}]boxblur=${boxblurSize}:${boxblurSize}=enable='between(x,${area.x},${area.x + area.width})*between(y,${area.y},${area.y + area.height})'[v${index}]`;
+      }
+    });
+
+    return filter || '[0:v][0:v]';
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
         <header className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-4xl font-bold text-white flex items-center gap-3">
-              <span className="text-3xl">🎬</span>
-              Video Mosaic Tool
-            </h1>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-              title="Toggle Settings"
-            >
-              ⚙️
-            </button>
-          </div>
-          <p className="text-slate-400">
-            Process videos locally with mosaic effects. Works offline!
-          </p>
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">🎬 Video Mosaic Tool</h1>
+          <p className="text-gray-600">Local video processing - No uploads, completely offline</p>
         </header>
 
-        {/* Settings Panel */}
-        {showSettings && (
-          <SettingsPanel
-            mosaicSize={mosaicSize}
-            onSizeChange={setMosaicSize}
-            onClose={() => setShowSettings(false)}
-          />
-        )}
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Upload Section */}
-          <div className="lg:col-span-1">
-            <VideoUpload onVideoSelect={handleVideoSelect} videoSelected={!!videoFile} />
-            <Controls
-              videoSelected={!!videoFile}
-              hasAreas={mosaicAreas.length > 0}
-              isProcessing={isProcessing}
-              onProcess={() => processVideo(videoFile!)}
-              onClear={handleReset}
-            />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Panel */}
+          <div className="space-y-6">
+            <VideoUploader onUpload={handleVideoUpload} />
+            {videoURL && (
+              <VideoPreview
+                videoURL={videoURL}
+                videoRef={videoRef}
+                mosaicAreas={mosaicAreas}
+                onAddArea={handleAddMosaicArea}
+              />
+            )}
           </div>
 
-          {/* Video Canvas Section */}
-          <div className="lg:col-span-2">
-            <VideoCanvas
-              videoUrl={videoUrl}
-              videoRef={videoRef}
-              canvasRef={canvasRef}
-              mosaicAreas={mosaicAreas}
-              onAddArea={addMosaicArea}
-              mosaicSize={mosaicSize}
-            />
+          {/* Right Panel */}
+          <div className="space-y-6">
+            {videoURL && (
+              <>
+                <MosaicControls
+                  areas={mosaicAreas}
+                  onUpdateArea={handleUpdateMosaicArea}
+                  onRemoveArea={handleRemoveMosaicArea}
+                />
+                <ProcessingStatus
+                  isProcessing={isProcessing}
+                  progress={progress}
+                  onProcess={processVideo}
+                  hasAreas={mosaicAreas.length > 0}
+                />
+              </>
+            )}
           </div>
         </div>
-
-        {/* Download Section */}
-        {isProcessing === false && videoFile && (
-          <div className="flex justify-center">
-            <DownloadButton onDownload={() => downloadVideo()} />
-          </div>
-        )}
-
-        {/* Debug Info */}
-        <footer className="mt-12 pt-6 border-t border-slate-700 text-slate-500 text-sm">
-          <p>
-            Mosaic Areas: {mosaicAreas.length} | Mosaic Size: {mosaicSize}px
-          </p>
-          <p className="mt-2">
-            💡 Tip: Draw rectangles on the video to select mosaic areas. All processing happens locally in your browser.
-          </p>
-        </footer>
       </div>
     </div>
-  )
+  );
 }
+
+export default App;

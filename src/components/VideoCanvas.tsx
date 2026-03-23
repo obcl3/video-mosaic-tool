@@ -3,11 +3,11 @@ import { MosaicArea } from '../types'
 
 interface VideoCanvasProps {
   videoUrl: string
-  videoRef: React.RefObject<HTMLVideoElement>
-  canvasRef: React.RefObject<HTMLCanvasElement>
+  videoRef: React.RefObject<HTMLVideoElement | null>
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
   mosaicAreas: MosaicArea[]
   onAddArea: (area: MosaicArea) => void
-  mosaicSize: number
+  mosaicSize?: number
 }
 
 export function VideoCanvas({
@@ -71,7 +71,7 @@ export function VideoCanvas({
     redrawCanvas()
   }
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = () => {
     if (!isDrawing || !currentRect || currentRect.width < 10 || currentRect.height < 10) {
       setIsDrawing(false)
       setCurrentRect(null)

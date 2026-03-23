@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface DownloadButtonProps {
-  onDownload: () => void
+  onDownload?: () => void
 }
 
 export function DownloadButton({ onDownload }: DownloadButtonProps) {

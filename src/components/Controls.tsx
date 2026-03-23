@@ -1,4 +1,4 @@
-import React from 'react'
+
 
 interface ControlsProps {
   videoSelected: boolean
@@ -19,7 +19,7 @@ export function Controls({
     <div className="bg-slate-800 rounded-xl p-6 space-y-4 mt-6">
       <button
         onClick={onProcess}
-        disabled={!videoSelected || !hasAreas || isProcessing}
+        disabled={!videoSelected || !hasAreas || isProcessing === true}
         className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
       >
         {isProcessing ? (

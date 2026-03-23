@@ -5,8 +5,8 @@ import { loadFFmpeg, processVideoWithFFmpeg } from '../utils/ffmpeg'
 const SETTINGS_KEY = 'mosaicToolSettings'
 
 export function useVideoProcessor(
-  videoRef: React.RefObject<HTMLVideoElement>,
-  canvasRef: React.RefObject<HTMLCanvasElement>
+  _videoRef: React.RefObject<HTMLVideoElement | null>,
+  _canvasRef: React.RefObject<HTMLCanvasElement | null>
 ) {
   const [mosaicAreas, setMosaicAreas] = useState<MosaicArea[]>([])
   const [mosaicSize, setMosaicSize] = useState(8)
