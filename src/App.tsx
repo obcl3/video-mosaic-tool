@@ -105,8 +105,8 @@ function App() {
       ]);
 
       // Read output file
-      const outputData = ffmpeg.readFile(outputName) as Uint8Array;
-      const blob = new Blob([new Uint8Array(outputData)], { type: 'video/mp4' });
+      const outputData = await ffmpeg.readFile(outputName);
+      const blob = new Blob([new Uint8Array(outputData as ArrayBuffer)], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
       // Trigger download

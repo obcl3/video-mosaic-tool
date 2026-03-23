@@ -26,7 +26,7 @@ type WorkerMessage = ProgressMessage | CompleteMessage | ErrorMessage
 
 // Worker handler
 self.onmessage = async (event: MessageEvent<ProcessMessage>) => {
-  const { type, videoFile, mosaicAreas, mosaicSize } = event.data
+  const { type, videoFile } = event.data
 
   if (type !== 'start') return
 
