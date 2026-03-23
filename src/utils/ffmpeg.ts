@@ -61,9 +61,8 @@ export async function processVideoWithFFmpeg(
 
     // Read output file
     const outputData = await ffmpeg.readFile(outputFileName)
-    const uint8Array = new Uint8Array(outputData as ArrayBufferLike)
-    const arrayBuffer = uint8Array.slice(0).buffer
-    const blob = new Blob([arrayBuffer], { type: 'video/mp4' })
+    const uint8Data = Array.from(new Uint8Array(outputData as unknown as ArrayBufferLike))
+    const blob = new Blob([new Uint8Array(uint8Data)], { type: 'video/mp4' })
 
     // Cleanup
     await ffmpeg.deleteFile(inputFileName)
