@@ -18,26 +18,39 @@ export default function VideoPreview({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
+  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
     
     const rect = containerRef.current.getBoundingClientRect();
-    setStartPos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    } else {
+      const mouseEvent = e as React.MouseEvent;
+      return {
+        x: mouseEvent.clientX - rect.left,
+        y: mouseEvent.clientY - rect.top,
+      };
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return;
+    
+    const pos = getPointerPos(e);
+    setStartPos(pos);
     setIsDrawing(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing || !canvasRef.current || !containerRef.current) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const currentPos = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
+    const currentPos = getPointerPos(e);
 
     // Draw preview rectangle
     const canvas = canvasRef.current;
@@ -59,29 +72,25 @@ export default function VideoPreview({
     ctx.fillRect(x, y, width, height);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (!isDrawing || !containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const endPos = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-
-    const x = Math.min(startPos.x, endPos.x);
-    const y = Math.min(startPos.y, endPos.y);
-    const width = Math.abs(endPos.x - startPos.x);
-    const height = Math.abs(endPos.y - startPos.y);
-
-    if (width > 10 && height > 10) {
-      onAddArea({ x, y, width, height, strength: 50 });
-    }
-
-    setIsDrawing(false);
+  const redrawCanvas = () => {
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
+  };
+
+  const handleMouseUp = () => {
+    if (!isDrawing || !currentRect || currentRect.width < 10 || currentRect.height < 10) {
+      setIsDrawing(false);
+      setCurrentRect(null);
+      redrawCanvas();
+      return;
+    }
+
+    onAddArea({ x: currentRect.x, y: currentRect.y, width: currentRect.width, height: currentRect.height, strength: 50 });
+    setIsDrawing(false);
+    setCurrentRect(null);
+    redrawCanvas();
   };
 
   return (
@@ -93,11 +102,14 @@ export default function VideoPreview({
       
       <div
         ref={containerRef}
-        className="relative bg-black rounded-lg overflow-hidden"
+        className="relative bg-black rounded-lg overflow-hidden touch-none select-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={() => setIsDrawing(false)}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
       >
         <video
           ref={videoRef}
