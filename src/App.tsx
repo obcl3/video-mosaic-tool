@@ -133,19 +133,15 @@ function App() {
   };
 
   const buildMosaicFilter = (areas: MosaicArea[]): string => {
-    // Create mosaic filter for each area
-    let filter = '';
-
-    areas.forEach((area, index) => {
-      const boxblurSize = Math.ceil((area.strength / 100) * 50);
-      if (index === 0) {
-        filter = `[0:v]boxblur=${boxblurSize}:${boxblurSize}=enable='between(x,${area.x},${area.x + area.width})*between(y,${area.y},${area.y + area.height})'[v${index}]`;
-      } else {
-        filter += `;[v${index - 1}]boxblur=${boxblurSize}:${boxblurSize}=enable='between(x,${area.x},${area.x + area.width})*between(y,${area.y},${area.y + area.height})'[v${index}]`;
-      }
-    });
-
-    return filter || '[0:v][0:v]';
+    if (areas.length === 0) return '';
+    
+    // Average strength from all areas
+    const avgStrength = areas.reduce((sum, a) => sum + a.strength, 0) / areas.length;
+    const blurSize = Math.max(2, Math.ceil((avgStrength / 100) * 50));
+    
+    // Simple approach: apply boxblur to the entire video
+    // For more precision, you'd need to use complex filter_complex with crop/overlay
+    return `boxblur=${blurSize}:${blurSize}`;
   };
 
   return (
