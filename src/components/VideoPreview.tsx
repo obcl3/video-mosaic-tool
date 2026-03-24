@@ -126,12 +126,13 @@ export default function VideoPreview({
           src={videoURL}
           controls
           className="w-full h-auto max-h-96"
+          style={{ pointerEvents: 'none' }}
         />
         
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-          style={{ opacity: isDrawing ? 1 : 0, pointerEvents: 'auto', transition: 'opacity 0.2s' }}
+          style={{ pointerEvents: 'auto' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
