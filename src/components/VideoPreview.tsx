@@ -79,6 +79,15 @@ export default function VideoPreview({
     }
   };
 
+  // Setup canvas size when video loads
+  const handleVideoLoad = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      canvasRef.current.width = video.videoWidth;
+      canvasRef.current.height = video.videoHeight;
+    }
+  };
+
   const handleMouseUp = () => {
     if (!isDrawing || !currentRect) {
       setIsDrawing(false);
@@ -113,26 +122,20 @@ export default function VideoPreview({
       <div
         ref={containerRef}
         className="relative bg-black rounded-lg overflow-hidden touch-none select-none"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={() => setIsDrawing(false)}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
       >
         <video
           ref={videoRef}
           src={videoURL}
           controls
-          className="w-full h-auto max-h-96"
-          style={{ pointerEvents: 'none' }}
+          className="w-full h-auto max-h-96 block"
+          onLoadedMetadata={handleVideoLoad}
+          onPlay={handleVideoLoad}
         />
         
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-          style={{ pointerEvents: 'auto' }}
+          style={{ pointerEvents: 'auto', display: 'block' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
