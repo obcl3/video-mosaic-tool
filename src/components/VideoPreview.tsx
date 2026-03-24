@@ -80,14 +80,24 @@ export default function VideoPreview({
   };
 
   const handleMouseUp = () => {
-    if (!isDrawing || !currentRect || currentRect.width < 10 || currentRect.height < 10) {
+    if (!isDrawing || !currentRect) {
       setIsDrawing(false);
       setCurrentRect(null);
       redrawCanvas();
       return;
     }
 
-    onAddArea({ x: currentRect.x, y: currentRect.y, width: currentRect.width, height: currentRect.height, strength: 50 });
+    // Only add if area is large enough
+    if (currentRect.width >= 10 && currentRect.height >= 10) {
+      onAddArea({ 
+        x: currentRect.x, 
+        y: currentRect.y, 
+        width: currentRect.width, 
+        height: currentRect.height, 
+        strength: 50 
+      });
+    }
+
     setIsDrawing(false);
     setCurrentRect(null);
     redrawCanvas();
@@ -121,7 +131,7 @@ export default function VideoPreview({
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-          style={{ display: isDrawing ? 'block' : 'none' }}
+          style={{ opacity: isDrawing ? 1 : 0, pointerEvents: 'auto', transition: 'opacity 0.2s' }}
         />
 
         {/* Display existing mosaic areas */}
