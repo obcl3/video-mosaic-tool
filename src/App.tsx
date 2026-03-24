@@ -30,25 +30,41 @@ function App() {
   useEffect(() => {
     const initFFmpeg = async () => {
       try {
-        setInitProgress(10);
+        setInitProgress(5);
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         
-        setInitProgress(30);
+        setInitProgress(15);
+        console.log('Loading FFmpeg core JS...');
         const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+        setInitProgress(25);
+        
+        setInitProgress(35);
+        console.log('Loading FFmpeg WASM...');
+        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        setInitProgress(50);
         
         setInitProgress(60);
-        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        console.log('Initializing FFmpeg...');
         
-        setInitProgress(80);
+        // FFmpeg.load() can take 10-30 seconds on first load
+        // Show continuous progress while loading
+        const progressInterval = setInterval(() => {
+          setInitProgress((prev) => Math.min(prev + 5, 95));
+        }, 500);
+        
         await ffmpeg.load({
           coreURL,
           wasmURL,
         });
         
+        clearInterval(progressInterval);
         setInitProgress(100);
+        console.log('FFmpeg initialized successfully');
+        
         setTimeout(() => setIsInitializing(false), 500);
       } catch (error) {
         console.error('Failed to initialize FFmpeg:', error);
+        // Still show main screen even if FFmpeg fails to load
         setIsInitializing(false);
       }
     };
