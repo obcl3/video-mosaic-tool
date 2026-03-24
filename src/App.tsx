@@ -2,9 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 
+interface BlurArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 function App() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoURL, setVideoURL] = useState<string>('');
+  const [blurArea, setBlurArea] = useState<BlurArea | null>(null);
   const [blurStrength, setBlurStrength] = useState(30);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -12,6 +20,10 @@ function App() {
   const [initProgress, setInitProgress] = useState(0);
   const [ffmpeg] = useState(() => new FFmpeg());
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
 
   // Initialize FFmpeg
   useEffect(() => {
@@ -57,11 +69,81 @@ function App() {
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoURL(url);
+    setBlurArea(null);
+  };
+
+  const handleVideoLoad = () => {
+    if (videoRef.current && canvasRef.current) {
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+    }
+  };
+
+  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    const rect = containerRef.current.getBoundingClientRect();
+    
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+    } else {
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const pos = getPointerPos(e);
+    setStartPos(pos);
+    setIsDrawing(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || !canvasRef.current) return;
+
+    const currentPos = getPointerPos(e);
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    const x = Math.min(startPos.x, currentPos.x);
+    const y = Math.min(startPos.y, currentPos.y);
+    const width = Math.abs(currentPos.x - startPos.x);
+    const height = Math.abs(currentPos.y - startPos.y);
+
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+    ctx.fillRect(x, y, width, height);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing) {
+      setIsDrawing(false);
+      return;
+    }
+
+    const currentPos = getPointerPos(e);
+    const x = Math.min(startPos.x, currentPos.x);
+    const y = Math.min(startPos.y, currentPos.y);
+    const width = Math.abs(currentPos.x - startPos.x);
+    const height = Math.abs(currentPos.y - startPos.y);
+
+    if (width >= 10 && height >= 10) {
+      setBlurArea({ x, y, width, height });
+    }
+
+    setIsDrawing(false);
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
   };
 
   const processVideo = async () => {
-    if (!videoFile || !ffmpeg.loaded) {
-      alert('動画を選択してください');
+    if (!videoFile || !blurArea || !ffmpeg.loaded) {
+      alert('動画を選択して、ぼかし領域を指定してください');
       return;
     }
 
@@ -77,15 +159,21 @@ function App() {
 
       setProgress(20);
 
-      // Simple blur filter applied to entire video
+      // Create blur filter for selected area
       const blurSize = Math.max(2, Math.ceil((blurStrength / 100) * 50));
-      const filterComplex = `boxblur=${blurSize}:${blurSize}`;
+      const filterComplex = `
+        [0:v]split[base][blur];
+        [blur]crop=w=${Math.ceil(blurArea.width)}:h=${Math.ceil(blurArea.height)}:x=${Math.ceil(blurArea.x)}:y=${Math.ceil(blurArea.y)},boxblur=${blurSize}[blurred];
+        [base][blurred]overlay=x=${Math.ceil(blurArea.x)}:y=${Math.ceil(blurArea.y)}[out]
+      `;
 
       setProgress(40);
 
       await ffmpeg.exec([
         '-i', inputName,
-        '-vf', filterComplex,
+        '-filter_complex', filterComplex,
+        '-map', '[out]',
+        '-map', '0:a',
         '-c:v', 'libx264',
         '-preset', 'fast',
         '-c:a', 'aac',
@@ -130,7 +218,7 @@ function App() {
             <div className="text-7xl">🎬</div>
           </div>
           <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-4">
-            Video Blur Tool
+            Video Mosaic Tool
           </h1>
           <p className="text-gray-500 mb-8 text-lg">準備中...</p>
           <div className="w-64 bg-gray-200 rounded-full h-3 overflow-hidden">
@@ -150,13 +238,13 @@ function App() {
       <div className="container mx-auto max-w-2xl px-4">
         <header className="mb-12 text-center">
           <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">
-            🎬 Video Blur Tool
+            🎬 Video Mosaic Tool
           </h1>
           <p className="text-gray-500 text-lg">観客をぼかす • ローカル処理 • プライバシー保護</p>
         </header>
 
         <div className="space-y-8">
-          {/* Upload Section */}
+          {/* Upload */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">1. 動画を選択</h2>
             <input
@@ -169,25 +257,62 @@ function App() {
               }}
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-500 file:to-blue-600 file:text-white hover:file:from-blue-600 hover:file:to-blue-700 cursor-pointer"
             />
-            {videoFile && (
-              <p className="mt-3 text-sm text-gray-600">選択: {videoFile.name}</p>
-            )}
+            {videoFile && <p className="mt-3 text-sm text-gray-600">選択: {videoFile.name}</p>}
           </div>
 
-          {/* Preview Section */}
+          {/* Preview & Area Selection */}
           {videoURL && (
             <>
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">2. プレビュー</h2>
-                <video
-                  ref={videoRef}
-                  src={videoURL}
-                  controls
-                  className="w-full rounded-lg bg-black"
-                />
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">2. ぼかす領域を選択</h2>
+                <p className="text-gray-600 mb-4">動画上でドラッグして、ぼかしたい領域（観客など）を選択</p>
+                
+                <div
+                  ref={containerRef}
+                  className="relative bg-black rounded-lg overflow-hidden"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={() => setIsDrawing(false)}
+                  onTouchStart={handleMouseDown}
+                  onTouchMove={handleMouseMove}
+                  onTouchEnd={handleMouseUp}
+                >
+                  <video
+                    ref={videoRef}
+                    src={videoURL}
+                    controls
+                    className="w-full block"
+                    onLoadedMetadata={handleVideoLoad}
+                    onPlay={handleVideoLoad}
+                  />
+                  
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute top-0 left-0 w-full h-full cursor-crosshair"
+                    style={{ pointerEvents: 'auto' }}
+                  />
+
+                  {blurArea && (
+                    <div
+                      className="absolute border-2 border-yellow-400 pointer-events-none"
+                      style={{
+                        left: `${blurArea.x}px`,
+                        top: `${blurArea.y}px`,
+                        width: `${blurArea.width}px`,
+                        height: `${blurArea.height}px`,
+                        backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                      }}
+                    />
+                  )}
+                </div>
+
+                {blurArea && (
+                  <p className="mt-4 text-sm text-blue-600 font-medium">✅ 領域を選択しました</p>
+                )}
               </div>
 
-              {/* Blur Strength Control */}
+              {/* Blur Strength */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">3. ぼかし強度を調整</h2>
                 <div className="space-y-4">
@@ -210,7 +335,7 @@ function App() {
                 </div>
               </div>
 
-              {/* Process Section */}
+              {/* Process */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">4. 処理実行</h2>
 
@@ -231,9 +356,9 @@ function App() {
 
                 <button
                   onClick={processVideo}
-                  disabled={isProcessing}
+                  disabled={isProcessing || !blurArea}
                   className={`w-full py-4 rounded-xl font-bold transition-all duration-300 ${
-                    isProcessing
+                    isProcessing || !blurArea
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:from-blue-600 hover:to-blue-700'
                   }`}
