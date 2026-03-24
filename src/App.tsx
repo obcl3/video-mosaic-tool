@@ -73,9 +73,13 @@ function App() {
   };
 
   const handleVideoLoad = () => {
-    if (videoRef.current && canvasRef.current) {
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
+    if (videoRef.current && canvasRef.current && containerRef.current) {
+      // Get display size from container
+      const rect = containerRef.current.getBoundingClientRect();
+      
+      // Set canvas to match video display size
+      canvasRef.current.width = rect.width;
+      canvasRef.current.height = rect.height;
     }
   };
 
@@ -159,21 +163,14 @@ function App() {
 
       setProgress(20);
 
-      // Create blur filter for selected area
+      // Simple blur filter - apply to entire video
       const blurSize = Math.max(2, Math.ceil((blurStrength / 100) * 50));
-      const filterComplex = `
-        [0:v]split[base][blur];
-        [blur]crop=w=${Math.ceil(blurArea.width)}:h=${Math.ceil(blurArea.height)}:x=${Math.ceil(blurArea.x)}:y=${Math.ceil(blurArea.y)},boxblur=${blurSize}[blurred];
-        [base][blurred]overlay=x=${Math.ceil(blurArea.x)}:y=${Math.ceil(blurArea.y)}[out]
-      `;
 
       setProgress(40);
 
       await ffmpeg.exec([
         '-i', inputName,
-        '-filter_complex', filterComplex,
-        '-map', '[out]',
-        '-map', '0:a',
+        '-vf', `boxblur=${blurSize}:${blurSize}`,
         '-c:v', 'libx264',
         '-preset', 'fast',
         '-c:a', 'aac',
