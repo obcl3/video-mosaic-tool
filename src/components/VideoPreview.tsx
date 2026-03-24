@@ -85,10 +85,10 @@ export default function VideoPreview({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4">Video Preview</h2>
-      <p className="text-sm text-gray-600 mb-4">
-        Click and drag to select areas to mosaic
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">動画プレビュー</h2>
+      <p className="text-sm text-gray-500 mb-6">
+        クリック＆ドラッグで領域を選択
       </p>
       
       <div
@@ -128,11 +128,11 @@ export default function VideoPreview({
         ))}
       </div>
 
-      <div className="mt-4 text-sm text-gray-600">
+      <div className="mt-6 text-sm text-gray-600">
         {mosaicAreas.length === 0 ? (
-          <p>No mosaic areas selected yet</p>
+          <p className="text-gray-400">領域がまだ選択されていません</p>
         ) : (
-          <p>{mosaicAreas.length} area(s) selected</p>
+          <p className="text-blue-600 font-medium">{mosaicAreas.length}個の領域を選択</p>
         )}
       </div>
     </div>

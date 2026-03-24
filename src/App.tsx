@@ -149,11 +149,13 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">🎬 Video Mosaic Tool</h1>
-          <p className="text-gray-600">Local video processing - No uploads, completely offline</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="container mx-auto px-4 py-12">
+        <header className="mb-12 text-center">
+          <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">
+            🎬 Video Mosaic Tool
+          </h1>
+          <p className="text-gray-500 text-lg">ローカルで完全処理 • オフライン対応 • プライバシー重視</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

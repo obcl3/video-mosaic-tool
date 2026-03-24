@@ -47,18 +47,18 @@ export default function VideoUploader({ onUpload }: VideoUploaderProps) {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          className={`relative overflow-hidden rounded-2xl p-12 text-center transition-all duration-300 ${
             isDragOver
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-300 bg-white hover:border-blue-400'
+              ? 'border-2 border-blue-500 bg-blue-50 scale-105'
+              : 'border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-white hover:border-gray-300 hover:shadow-lg'
           }`}
         >
-          <div className="text-4xl mb-4">📹</div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Drop video here
+          <div className="text-5xl mb-4 opacity-80">🎬</div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            動画をアップロード
           </h3>
-          <p className="text-gray-600 mb-4">
-            or click to select a video file (MP4, WebM, etc.)
+          <p className="text-gray-500 mb-6 text-sm">
+            ドラッグ＆ドロップするか、クリックして選択
           </p>
           <button
             type="button"
@@ -66,9 +66,9 @@ export default function VideoUploader({ onUpload }: VideoUploaderProps) {
               e.preventDefault();
               document.getElementById('video-input')?.click();
             }}
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-xl hover:shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
           >
-            Select File
+            ファイルを選択
           </button>
         </div>
       </label>

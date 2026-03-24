@@ -12,12 +12,12 @@ export default function MosaicControls({
   onRemoveArea,
 }: MosaicControlsProps) {
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4">Mosaic Areas</h2>
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">モザイク領域</h2>
       
       {areas.length === 0 ? (
-        <p className="text-gray-500 text-center py-8">
-          Select areas in the preview to start
+        <p className="text-gray-400 text-center py-12 text-sm">
+          プレビューで領域を選択して開始
         </p>
       ) : (
         <div className="space-y-4">
@@ -26,61 +26,61 @@ export default function MosaicControls({
               key={area.id}
               className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
             >
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="font-semibold text-gray-800">
-                  Area {index + 1}
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="font-bold text-gray-900">
+                  領域 {index + 1}
                 </h3>
                 <button
                   onClick={() => onRemoveArea(area.id)}
-                  className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                  className="px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium"
                 >
-                  Remove
+                  削除
                 </button>
               </div>
 
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <label className="block text-gray-600 mb-1">X</label>
+                    <label className="block text-gray-700 font-medium mb-2">X座標</label>
                     <input
                       type="number"
                       value={Math.round(area.x)}
                       onChange={(e) => onUpdateArea(area.id, { x: parseInt(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 mb-1">Y</label>
+                    <label className="block text-gray-700 font-medium mb-2">Y座標</label>
                     <input
                       type="number"
                       value={Math.round(area.y)}
                       onChange={(e) => onUpdateArea(area.id, { y: parseInt(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 mb-1">Width</label>
+                    <label className="block text-gray-700 font-medium mb-2">幅</label>
                     <input
                       type="number"
                       value={Math.round(area.width)}
                       onChange={(e) => onUpdateArea(area.id, { width: parseInt(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 mb-1">Height</label>
+                    <label className="block text-gray-700 font-medium mb-2">高さ</label>
                     <input
                       type="number"
                       value={Math.round(area.height)}
                       onChange={(e) => onUpdateArea(area.id, { height: parseInt(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-gray-600 mb-2">
-                    Mosaic Strength: {Math.round(area.strength)}%
+                  <label className="block text-gray-700 font-medium mb-3">
+                    モザイク強度: <span className="text-blue-600 font-bold">{Math.round(area.strength)}%</span>
                   </label>
                   <input
                     type="range"
