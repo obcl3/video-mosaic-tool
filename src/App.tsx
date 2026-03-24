@@ -21,6 +21,8 @@ function App() {
   const [mosaicAreas, setMosaicAreas] = useState<MosaicArea[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [initProgress, setInitProgress] = useState(0);
   const [ffmpeg] = useState(() => new FFmpeg());
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -28,13 +30,26 @@ function App() {
   useEffect(() => {
     const initFFmpeg = async () => {
       try {
+        setInitProgress(10);
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+        
+        setInitProgress(30);
+        const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+        
+        setInitProgress(60);
+        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        
+        setInitProgress(80);
         await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+          coreURL,
+          wasmURL,
         });
+        
+        setInitProgress(100);
+        setTimeout(() => setIsInitializing(false), 500);
       } catch (error) {
         console.error('Failed to initialize FFmpeg:', error);
+        setIsInitializing(false);
       }
     };
 
@@ -143,6 +158,31 @@ function App() {
     // For more precision, you'd need to use complex filter_complex with crop/overlay
     return `boxblur=${blurSize}:${blurSize}`;
   };
+
+  // Loading/Splash Screen
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-8 animate-bounce">
+            <div className="text-7xl">🎬</div>
+          </div>
+          <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-4">
+            Video Mosaic Tool
+          </h1>
+          <p className="text-gray-500 mb-8 text-lg">アプリを準備中...</p>
+          
+          <div className="w-64 bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+              style={{ width: `${initProgress}%` }}
+            />
+          </div>
+          <p className="text-gray-400 mt-4 text-sm">読み込み中 {initProgress}%</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
