@@ -89,9 +89,23 @@ function App() {
     console.log('Video loaded')
     if (videoRef.current && canvasRef.current && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
-      canvasRef.current.width = rect.width
-      canvasRef.current.height = rect.height
-      console.log(`Canvas size set to ${rect.width}x${rect.height}`)
+      const dpr = window.devicePixelRatio || 1
+      
+      // Canvas サイズを設定（デバイスピクセル対応）
+      canvasRef.current.width = Math.ceil(rect.width * dpr)
+      canvasRef.current.height = Math.ceil(rect.height * dpr)
+      
+      // CSS サイズも設定（物理サイズ）
+      canvasRef.current.style.width = `${rect.width}px`
+      canvasRef.current.style.height = `${rect.height}px`
+      
+      // Context をスケーリング
+      const ctx = canvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
+      
+      console.log(`Canvas size set to ${rect.width}x${rect.height} (dpr: ${dpr})`)
     }
   }
 
@@ -99,17 +113,18 @@ function App() {
     if (!containerRef.current) return { x: 0, y: 0 }
 
     const rect = containerRef.current.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
 
     if ('touches' in e) {
       const touch = e.touches[0]
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top,
+        x: (touch.clientX - rect.left) * dpr,
+        y: (touch.clientY - rect.top) * dpr,
       }
     } else {
       return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: (e.clientX - rect.left) * dpr,
+        y: (e.clientY - rect.top) * dpr,
       }
     }
   }
@@ -217,13 +232,30 @@ function App() {
       const url = URL.createObjectURL(blob)
 
       console.log('Downloading file...')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `blurred_${videoFile.name}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      
+      // iOS Safari 対応
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      
+      if (isIOS) {
+        // iOS: window.open で Blob URL を表示（ダウンロード UI）
+        const win = window.open(url, '_blank')
+        if (!win) {
+          alert('ポップアップがブロックされています。ブラウザ設定を確認してください')
+        }
+      } else {
+        // その他: 標準的な a タグクリック
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `blurred_${videoFile.name}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+      
+      // ダウンロード完了後、少し待ってから URL をリボケート
+      setTimeout(() => {
+        URL.revokeObjectURL(url)
+      }, 1000)
 
       console.log('Cleaning up...')
       ffmpeg.deleteFile(inputName)
