@@ -82,8 +82,14 @@ function App() {
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
 
+        // 最初のフレームを確実に取得するため、currentTime を設定
+        video.currentTime = 0.1 // 100ms の位置で安全に取得
+      }
+
+      video.oncanplay = () => {
         const ctx = canvas.getContext('2d')
         if (ctx) {
+          console.log('Drawing frame to canvas...')
           ctx.drawImage(video, 0, 0)
           canvas.toBlob((blob) => {
             if (blob) {
@@ -165,14 +171,17 @@ function App() {
   }
 
   const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
     const pos = getPointerPos(e)
     setStartPos(pos)
     setIsDrawing(true)
+    console.log('Drawing started:', pos)
   }
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing || !canvasRef.current) return
 
+    e.preventDefault()
     const currentPos = getPointerPos(e)
     const ctx = canvasRef.current.getContext('2d')
     if (!ctx) return
@@ -193,6 +202,7 @@ function App() {
   }
 
   const handleMouseUp = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
     if (!isDrawing) {
       setIsDrawing(false)
       return
@@ -218,8 +228,12 @@ function App() {
   }
 
   const processVideo = async () => {
+    console.log('Process video called:', { videoFile: !!videoFile, blurArea: !!blurArea, ffmpegLoaded: ffmpeg.loaded })
+    
     if (!videoFile || !blurArea || !ffmpeg.loaded) {
-      alert('動画を選択して、ぼかす領域を指定してください')
+      const reason = !videoFile ? '動画未選択' : !blurArea ? '領域未選択' : 'FFmpeg未初期化'
+      console.error('Validation failed:', reason)
+      alert(`${reason}\n動画を選択して、ぼかす領域を指定してください`)
       return
     }
 
@@ -370,6 +384,7 @@ function App() {
               <div
                 ref={containerRef}
                 className="relative bg-black rounded-lg overflow-hidden shadow-lg"
+                style={{ touchAction: 'none' }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -388,7 +403,7 @@ function App() {
                 <canvas
                   ref={canvasRef}
                   className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-                  style={{ pointerEvents: 'auto' }}
+                  style={{ pointerEvents: 'auto', touchAction: 'none' }}
                 />
 
                 {blurArea && (
