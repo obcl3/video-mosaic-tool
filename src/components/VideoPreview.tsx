@@ -132,6 +132,13 @@ export default function VideoPreview({
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full cursor-crosshair"
           style={{ opacity: isDrawing ? 1 : 0, pointerEvents: 'auto', transition: 'opacity 0.2s' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={() => setIsDrawing(false)}
+          onTouchStart={handleMouseDown}
+          onTouchMove={handleMouseMove}
+          onTouchEnd={handleMouseUp}
         />
 
         {/* Display existing mosaic areas */}

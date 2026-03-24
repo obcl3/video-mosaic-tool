@@ -55,7 +55,7 @@ export default function VideoUploader({ onUpload }: VideoUploaderProps) {
         >
           <div className="text-5xl mb-4 opacity-80">🎬</div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">
-            動画をアップロード
+            動画を選択
           </h3>
           <p className="text-gray-500 mb-6 text-sm">
             ドラッグ＆ドロップするか、クリックして選択
