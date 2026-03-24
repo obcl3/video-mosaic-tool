@@ -1,24 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
-import VideoUploader from './components/VideoUploader';
-import VideoPreview from './components/VideoPreview';
-import MosaicControls from './components/MosaicControls';
-import ProcessingStatus from './components/ProcessingStatus';
-
-export interface MosaicArea {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  strength: number;
-}
 
 function App() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoURL, setVideoURL] = useState<string>('');
-  const [mosaicAreas, setMosaicAreas] = useState<MosaicArea[]>([]);
+  const [blurStrength, setBlurStrength] = useState(30);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -33,21 +20,13 @@ function App() {
         setInitProgress(5);
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         
-        setInitProgress(15);
-        console.log('Loading FFmpeg core JS...');
+        setInitProgress(30);
         const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-        setInitProgress(25);
-        
-        setInitProgress(35);
-        console.log('Loading FFmpeg WASM...');
-        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-        setInitProgress(50);
         
         setInitProgress(60);
-        console.log('Initializing FFmpeg...');
+        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
         
-        // FFmpeg.load() can take 10-30 seconds on first load
-        // Show continuous progress while loading
+        setInitProgress(75);
         const progressInterval = setInterval(() => {
           setInitProgress((prev) => Math.min(prev + 5, 95));
         }, 500);
@@ -59,19 +38,15 @@ function App() {
         
         clearInterval(progressInterval);
         setInitProgress(100);
-        console.log('FFmpeg initialized successfully');
-        
         setTimeout(() => setIsInitializing(false), 500);
       } catch (error) {
         console.error('Failed to initialize FFmpeg:', error);
-        // Still show main screen even if FFmpeg fails to load
         setIsInitializing(false);
       }
     };
 
     initFFmpeg();
 
-    // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js')
         .catch(error => console.error('Service Worker registration failed:', error));
@@ -82,32 +57,11 @@ function App() {
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoURL(url);
-    setMosaicAreas([]);
-  };
-
-  const handleAddMosaicArea = (area: Omit<MosaicArea, 'id'>) => {
-    const newArea: MosaicArea = {
-      ...area,
-      id: Date.now().toString(),
-    };
-    setMosaicAreas([...mosaicAreas, newArea]);
-  };
-
-  const handleRemoveMosaicArea = (id: string) => {
-    setMosaicAreas(mosaicAreas.filter(area => area.id !== id));
-  };
-
-  const handleUpdateMosaicArea = (id: string, updates: Partial<MosaicArea>) => {
-    setMosaicAreas(
-      mosaicAreas.map(area =>
-        area.id === id ? { ...area, ...updates } : area
-      )
-    );
   };
 
   const processVideo = async () => {
-    if (!videoFile || mosaicAreas.length === 0 || !ffmpeg.loaded) {
-      alert('Please upload a video and add at least one mosaic area');
+    if (!videoFile || !ffmpeg.loaded) {
+      alert('動画を選択してください');
       return;
     }
 
@@ -115,67 +69,59 @@ function App() {
     setProgress(0);
 
     try {
-      // Write input video to FFmpeg filesystem
-      const inputName = 'input_video.mp4';
-      const outputName = 'output_video.mp4';
+      const inputName = 'input.mp4';
+      const outputName = 'output.mp4';
 
       const data = await videoFile.arrayBuffer();
       ffmpeg.writeFile(inputName, new Uint8Array(data));
 
-      // Build FFmpeg filter string for mosaics
-      const filterComplex = buildMosaicFilter(mosaicAreas);
+      setProgress(20);
 
-      // Run FFmpeg
+      // Simple blur filter applied to entire video
+      const blurSize = Math.max(2, Math.ceil((blurStrength / 100) * 50));
+      const filterComplex = `boxblur=${blurSize}:${blurSize}`;
+
+      setProgress(40);
+
       await ffmpeg.exec([
         '-i', inputName,
         '-vf', filterComplex,
         '-c:v', 'libx264',
-        '-preset', 'medium',
+        '-preset', 'fast',
         '-c:a', 'aac',
         outputName,
       ]);
 
-      // Read output file
+      setProgress(80);
+
       const outputData = await ffmpeg.readFile(outputName);
       const uint8Data = Array.from(new Uint8Array(outputData as unknown as ArrayBufferLike));
       const blob = new Blob([new Uint8Array(uint8Data)], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
-      // Trigger download
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mosaic_${videoFile.name}`;
+      a.download = `blurred_${videoFile.name}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Cleanup
       ffmpeg.deleteFile(inputName);
       ffmpeg.deleteFile(outputName);
 
       setProgress(100);
-      setTimeout(() => setIsProcessing(false), 1000);
+      setTimeout(() => {
+        setIsProcessing(false);
+        setProgress(0);
+      }, 1000);
     } catch (error) {
-      console.error('Video processing error:', error);
-      alert('Error processing video. Check console for details.');
+      console.error('Error:', error);
+      alert('処理中にエラーが発生しました');
       setIsProcessing(false);
     }
   };
 
-  const buildMosaicFilter = (areas: MosaicArea[]): string => {
-    if (areas.length === 0) return '';
-    
-    // Average strength from all areas
-    const avgStrength = areas.reduce((sum, a) => sum + a.strength, 0) / areas.length;
-    const blurSize = Math.max(2, Math.ceil((avgStrength / 100) * 50));
-    
-    // Simple approach: apply boxblur to the entire video
-    // For more precision, you'd need to use complex filter_complex with crop/overlay
-    return `boxblur=${blurSize}:${blurSize}`;
-  };
-
-  // Loading/Splash Screen
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
@@ -184,64 +130,125 @@ function App() {
             <div className="text-7xl">🎬</div>
           </div>
           <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-4">
-            Video Mosaic Tool
+            Video Blur Tool
           </h1>
-          <p className="text-gray-500 mb-8 text-lg">アプリを準備中...</p>
-          
+          <p className="text-gray-500 mb-8 text-lg">準備中...</p>
           <div className="w-64 bg-gray-200 rounded-full h-3 overflow-hidden">
             <div
               className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
               style={{ width: `${initProgress}%` }}
             />
           </div>
-          <p className="text-gray-400 mt-4 text-sm">読み込み中 {initProgress}%</p>
+          <p className="text-gray-400 mt-4 text-sm">{initProgress}%</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="container mx-auto px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-12">
+      <div className="container mx-auto max-w-2xl px-4">
         <header className="mb-12 text-center">
-          <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">
-            🎬 Video Mosaic Tool
+          <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">
+            🎬 Video Blur Tool
           </h1>
-          <p className="text-gray-500 text-lg">ローカルで完全処理 • オフライン対応 • プライバシー重視</p>
+          <p className="text-gray-500 text-lg">観客をぼかす • ローカル処理 • プライバシー保護</p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Panel */}
-          <div className="space-y-6">
-            <VideoUploader onUpload={handleVideoUpload} />
-            {videoURL && (
-              <VideoPreview
-                videoURL={videoURL}
-                videoRef={videoRef}
-                mosaicAreas={mosaicAreas}
-                onAddArea={handleAddMosaicArea}
-              />
+        <div className="space-y-8">
+          {/* Upload Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">1. 動画を選択</h2>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => {
+                if (e.currentTarget.files?.[0]) {
+                  handleVideoUpload(e.currentTarget.files[0]);
+                }
+              }}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-500 file:to-blue-600 file:text-white hover:file:from-blue-600 hover:file:to-blue-700 cursor-pointer"
+            />
+            {videoFile && (
+              <p className="mt-3 text-sm text-gray-600">選択: {videoFile.name}</p>
             )}
           </div>
 
-          {/* Right Panel */}
-          <div className="space-y-6">
-            {videoURL && (
-              <>
-                <MosaicControls
-                  areas={mosaicAreas}
-                  onUpdateArea={handleUpdateMosaicArea}
-                  onRemoveArea={handleRemoveMosaicArea}
+          {/* Preview Section */}
+          {videoURL && (
+            <>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">2. プレビュー</h2>
+                <video
+                  ref={videoRef}
+                  src={videoURL}
+                  controls
+                  className="w-full rounded-lg bg-black"
                 />
-                <ProcessingStatus
-                  isProcessing={isProcessing}
-                  progress={progress}
-                  onProcess={processVideo}
-                  hasAreas={mosaicAreas.length > 0}
-                />
-              </>
-            )}
-          </div>
+              </div>
+
+              {/* Blur Strength Control */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">3. ぼかし強度を調整</h2>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <label className="text-gray-700 font-medium">強度: {blurStrength}%</label>
+                    <span className="text-blue-600 font-bold">{Math.ceil((blurStrength / 100) * 50)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={blurStrength}
+                    onChange={(e) => setBlurStrength(parseInt(e.target.value))}
+                    className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>弱</span>
+                    <span>強</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Process Section */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">4. 処理実行</h2>
+
+                {isProcessing && (
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm font-medium text-gray-700">処理中...</span>
+                      <span className="text-sm font-bold text-blue-600">{progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={processVideo}
+                  disabled={isProcessing}
+                  className={`w-full py-4 rounded-xl font-bold transition-all duration-300 ${
+                    isProcessing
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:from-blue-600 hover:to-blue-700'
+                  }`}
+                >
+                  {isProcessing ? '⏳ 処理中...' : '✨ ぼかし処理 & ダウンロード'}
+                </button>
+
+                <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-sm text-blue-800">
+                    <strong>💡 ヒント：</strong>ぼかし強度を上げるほど、処理時間が少し長くなります。
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
