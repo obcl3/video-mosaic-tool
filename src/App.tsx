@@ -47,9 +47,11 @@ function App() {
 
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm'
 
+        console.log('Fetching FFmpeg core JS...')
         setInitProgress(30)
         const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript')
 
+        console.log('Fetching FFmpeg WASM...')
         setInitProgress(60)
         const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
 
@@ -58,18 +60,23 @@ function App() {
           setInitProgress((prev) => Math.min(prev + 5, 95))
         }, 500)
 
+        console.log('Loading FFmpeg...')
         await ffmpeg.load({
           coreURL,
           wasmURL,
         })
 
         clearInterval(progressInterval)
-        console.log('FFmpeg loaded successfully')
+        console.log('✓ FFmpeg loaded successfully')
+        console.log('FFmpeg ready:', ffmpeg.loaded)
         setInitProgress(100)
         setTimeout(() => setIsInitializing(false), 500)
       } catch (error) {
-        console.error('Failed to initialize FFmpeg:', error)
-        setIsInitializing(false)
+        console.error('✗ Failed to initialize FFmpeg:', error)
+        console.error('Error details:', error instanceof Error ? error.message : error)
+        // 初期化失敗してもメイン画面を表示（動画選択は可能）
+        setInitProgress(100)
+        setTimeout(() => setIsInitializing(false), 1000)
       }
     }
 
@@ -184,23 +191,27 @@ function App() {
     const deltaX = pos.clientX - touchState.startX
     const deltaY = pos.clientY - touchState.startY
 
-    const scaleX = rect.width / frameSize.width
-    const scaleY = rect.height / frameSize.height
+    const scaleX = frameSize.width / rect.width
+    const scaleY = frameSize.height / rect.height
 
-    setShapes(
-      shapes.map((shape) => {
+    console.log('Moving:', { deltaX, deltaY, scaleX, scaleY, type: touchState.type })
+
+    setShapes((prevShapes) =>
+      prevShapes.map((shape) => {
         if (shape.id !== touchState.shapeId) return shape
 
         if (touchState.type === 'move') {
+          const newX = shape.x + deltaX * scaleX
+          const newY = shape.y + deltaY * scaleY
           return {
             ...shape,
-            x: Math.max(0, Math.min(shape.x + deltaX / scaleX, frameSize.width - shape.width)),
-            y: Math.max(0, Math.min(shape.y + deltaY / scaleY, frameSize.height - shape.height)),
+            x: Math.max(0, Math.min(newX, frameSize.width - shape.width)),
+            y: Math.max(0, Math.min(newY, frameSize.height - shape.height)),
           }
         } else {
           // resize
-          const newWidth = Math.max(20, touchState.startWidth + deltaX / scaleX)
-          const newHeight = Math.max(20, touchState.startHeight + deltaY / scaleY)
+          const newWidth = Math.max(20, touchState.startWidth + deltaX * scaleX)
+          const newHeight = Math.max(20, touchState.startHeight + deltaY * scaleY)
           return {
             ...shape,
             width: newWidth,
@@ -243,10 +254,18 @@ function App() {
   const processVideo = async () => {
     console.log('Process video called:', { videoFile: !!videoFile, shapes: shapes.length, ffmpegLoaded: ffmpeg.loaded })
 
-    if (!videoFile || shapes.length === 0 || !ffmpeg.loaded) {
-      const reason = !videoFile ? '動画未選択' : shapes.length === 0 ? '領域未追加' : 'FFmpeg未初期化'
-      console.error('Validation failed:', reason)
-      alert(`${reason}\n形を追加して領域を指定してください`)
+    if (!videoFile) {
+      alert('動画を選択してください')
+      return
+    }
+
+    if (shapes.length === 0) {
+      alert('形を追加して領域を指定してください')
+      return
+    }
+
+    if (!ffmpeg.loaded) {
+      alert('FFmpeg の初期化に失敗しました。ページをリロードして、もう一度試してください')
       return
     }
 
@@ -399,7 +418,7 @@ function App() {
                 <svg
                   ref={svgRef}
                   className="absolute top-0 left-0 w-full h-full"
-                  style={{ pointerEvents: shapes.length > 0 ? 'auto' : 'none' }}
+                  style={{ pointerEvents: 'auto', touchAction: 'none' }}
                   onMouseMove={handleMouseMove}
                   onTouchMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
