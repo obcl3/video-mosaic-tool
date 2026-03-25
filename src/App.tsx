@@ -166,35 +166,36 @@ function App() {
     console.log('Shape deleted:', id)
   }
 
-  const handleShapeMouseDown = (e: React.MouseEvent | React.TouchEvent, shapeId: string, type: 'move' | 'resize') => {
+  const handleShapeMouseDown = (e: React.PointerEvent, shapeId: string, type: 'move' | 'resize') => {
     e.preventDefault()
     e.stopPropagation()
 
-    const pos = 'touches' in e ? e.touches[0] : e
+    const shape = shapes.find((s) => s.id === shapeId)
+    if (!shape) return
+
     setTouchState({
       shapeId,
       type,
-      startX: pos.clientX,
-      startY: pos.clientY,
-      startWidth: shapes.find((s) => s.id === shapeId)?.width || 0,
-      startHeight: shapes.find((s) => s.id === shapeId)?.height || 0,
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: shape.width,
+      startHeight: shape.height,
     })
+
+    console.log('Touch started:', { shapeId, type, x: e.clientX, y: e.clientY })
   }
 
-  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleMouseMove = (e: React.PointerEvent) => {
     if (!touchState || !containerRef.current) return
 
     e.preventDefault()
-    const pos = 'touches' in e ? e.touches[0] : e
     const rect = containerRef.current.getBoundingClientRect()
 
-    const deltaX = pos.clientX - touchState.startX
-    const deltaY = pos.clientY - touchState.startY
+    const deltaX = e.clientX - touchState.startX
+    const deltaY = e.clientY - touchState.startY
 
     const scaleX = frameSize.width / rect.width
     const scaleY = frameSize.height / rect.height
-
-    console.log('Moving:', { deltaX, deltaY, scaleX, scaleY, type: touchState.type })
 
     setShapes((prevShapes) =>
       prevShapes.map((shape) => {
@@ -222,8 +223,10 @@ function App() {
     )
   }
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.PointerEvent) => {
+    e.preventDefault()
     setTouchState(null)
+    console.log('Touch ended')
   }
 
   const getBoundingBox = (): Shape | null => {
@@ -356,7 +359,7 @@ function App() {
   // ========== Render: Splash Screen ==========
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="mb-8 animate-bounce">
             <div className="text-7xl">🎬</div>
@@ -365,7 +368,7 @@ function App() {
             Video Mosaic Tool
           </h1>
           <p className="text-gray-500 mb-8 text-lg">準備中...</p>
-          <div className="w-64 bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="w-full max-w-xs bg-gray-200 rounded-full h-3 overflow-hidden mx-auto">
             <div
               className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
               style={{ width: `${initProgress}%` }}
@@ -393,6 +396,7 @@ function App() {
         <div className="mb-8">
           <label className="block text-sm font-semibold text-gray-700 mb-3">動画ファイルを選択</label>
           <input
+            key={videoFile?.name || 'file-input'}
             type="file"
             accept="video/*"
             onChange={(e) => {
@@ -419,11 +423,9 @@ function App() {
                   ref={svgRef}
                   className="absolute top-0 left-0 w-full h-full"
                   style={{ pointerEvents: 'auto', touchAction: 'none' }}
-                  onMouseMove={handleMouseMove}
-                  onTouchMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onTouchEnd={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
+                  onPointerMove={handleMouseMove}
+                  onPointerUp={handleMouseUp}
+                  onPointerLeave={handleMouseUp}
                 >
                   {shapes.map((shape) => {
                     const rect = containerRef.current?.getBoundingClientRect()
@@ -440,8 +442,7 @@ function App() {
                             fill="none"
                             stroke="#3b82f6"
                             strokeWidth="2"
-                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'move')}
-                            onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            onPointerDown={(e) => handleShapeMouseDown(e as React.PointerEvent, shape.id, 'move')}
                             style={{ cursor: 'move' }}
                           />
                         ) : (
@@ -453,8 +454,7 @@ function App() {
                             fill="none"
                             stroke="#3b82f6"
                             strokeWidth="2"
-                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'move')}
-                            onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            onPointerDown={(e) => handleShapeMouseDown(e as React.PointerEvent, shape.id, 'move')}
                             style={{ cursor: 'move' }}
                           />
                         )}
@@ -467,8 +467,7 @@ function App() {
                           fill="#fbbf24"
                           stroke="#f59e0b"
                           strokeWidth="1"
-                          onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'resize')}
-                          onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'resize')}
+                          onPointerDown={(e) => handleShapeMouseDown(e as React.PointerEvent, shape.id, 'resize')}
                           style={{ cursor: 'nwse-resize' }}
                         />
                       </g>
