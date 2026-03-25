@@ -356,7 +356,7 @@ function App() {
   // ========== Render: Splash Screen ==========
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="mb-8 animate-bounce">
             <div className="text-7xl">🎬</div>
@@ -365,7 +365,7 @@ function App() {
             Video Mosaic Tool
           </h1>
           <p className="text-gray-500 mb-8 text-lg">準備中...</p>
-          <div className="w-64 bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="w-full max-w-xs bg-gray-200 rounded-full h-3 overflow-hidden mx-auto">
             <div
               className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
               style={{ width: `${initProgress}%` }}
