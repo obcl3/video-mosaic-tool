@@ -2,30 +2,41 @@ import { useEffect, useRef, useState } from 'react'
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { toBlobURL } from '@ffmpeg/util'
 
-interface BlurArea {
+interface Shape {
+  id: string
+  type: 'circle' | 'rect'
   x: number
   y: number
   width: number
   height: number
 }
 
+interface TouchState {
+  shapeId: string
+  type: 'move' | 'resize'
+  startX: number
+  startY: number
+  startWidth: number
+  startHeight: number
+}
+
 function App() {
   // ========== State Variables ==========
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [frameImage, setFrameImage] = useState<string>('')
-  const [blurArea, setBlurArea] = useState<BlurArea | null>(null)
+  const [frameSize, setFrameSize] = useState({ width: 0, height: 0 })
+  const [shapes, setShapes] = useState<Shape[]>([])
   const [blurStrength, setBlurStrength] = useState(50)
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [isInitializing, setIsInitializing] = useState(true)
   const [initProgress, setInitProgress] = useState(0)
+  const [touchState, setTouchState] = useState<TouchState | null>(null)
 
   // ========== useRef Variables ==========
   const [ffmpeg] = useState(() => new FFmpeg())
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
+  const svgRef = useRef<SVGSVGElement>(null)
 
   // ========== useEffect: FFmpeg Initialization ==========
   useEffect(() => {
@@ -81,9 +92,9 @@ function App() {
         console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`)
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
+        setFrameSize({ width: video.videoWidth, height: video.videoHeight })
 
-        // 最初のフレームを確実に取得するため、currentTime を設定
-        video.currentTime = 0.1 // 100ms の位置で安全に取得
+        video.currentTime = 0.1
       }
 
       video.oncanplay = () => {
@@ -119,7 +130,7 @@ function App() {
   const handleVideoUpload = async (file: File) => {
     console.log('Video uploaded:', file.name)
     setVideoFile(file)
-    setBlurArea(null)
+    setShapes([])
     setFrameImage('')
 
     try {
@@ -130,110 +141,112 @@ function App() {
     }
   }
 
-  const handleCanvasLoad = () => {
-    console.log('Canvas loaded for area selection')
-    if (containerRef.current && canvasRef.current) {
-      const rect = containerRef.current.getBoundingClientRect()
-      const dpr = window.devicePixelRatio || 1
-
-      canvasRef.current.width = Math.ceil(rect.width * dpr)
-      canvasRef.current.height = Math.ceil(rect.height * dpr)
-      canvasRef.current.style.width = `${rect.width}px`
-      canvasRef.current.style.height = `${rect.height}px`
-
-      const ctx = canvasRef.current.getContext('2d')
-      if (ctx) {
-        ctx.scale(dpr, dpr)
-      }
-
-      console.log(`Canvas size set to ${rect.width}x${rect.height}`)
+  const addShape = (type: 'circle' | 'rect') => {
+    const newShape: Shape = {
+      id: Date.now().toString(),
+      type,
+      x: frameSize.width / 2 - 50,
+      y: frameSize.height / 2 - 50,
+      width: 100,
+      height: 100,
     }
+    setShapes([...shapes, newShape])
+    console.log('Shape added:', newShape)
   }
 
-  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!containerRef.current) return { x: 0, y: 0 }
-
-    const rect = containerRef.current.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-
-    if ('touches' in e) {
-      const touch = e.touches[0]
-      return {
-        x: (touch.clientX - rect.left) * dpr,
-        y: (touch.clientY - rect.top) * dpr,
-      }
-    } else {
-      return {
-        x: (e.clientX - rect.left) * dpr,
-        y: (e.clientY - rect.top) * dpr,
-      }
-    }
+  const deleteShape = (id: string) => {
+    setShapes(shapes.filter((s) => s.id !== id))
+    console.log('Shape deleted:', id)
   }
 
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleShapeMouseDown = (e: React.MouseEvent | React.TouchEvent, shapeId: string, type: 'move' | 'resize') => {
     e.preventDefault()
-    const pos = getPointerPos(e)
-    setStartPos(pos)
-    setIsDrawing(true)
-    console.log('Drawing started:', pos)
+    e.stopPropagation()
+
+    const pos = 'touches' in e ? e.touches[0] : e
+    setTouchState({
+      shapeId,
+      type,
+      startX: pos.clientX,
+      startY: pos.clientY,
+      startWidth: shapes.find((s) => s.id === shapeId)?.width || 0,
+      startHeight: shapes.find((s) => s.id === shapeId)?.height || 0,
+    })
   }
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing || !canvasRef.current) return
+    if (!touchState || !containerRef.current) return
 
     e.preventDefault()
-    const currentPos = getPointerPos(e)
-    const ctx = canvasRef.current.getContext('2d')
-    if (!ctx) return
+    const pos = 'touches' in e ? e.touches[0] : e
+    const rect = containerRef.current.getBoundingClientRect()
 
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    const deltaX = pos.clientX - touchState.startX
+    const deltaY = pos.clientY - touchState.startY
 
-    const x = Math.min(startPos.x, currentPos.x)
-    const y = Math.min(startPos.y, currentPos.y)
-    const width = Math.abs(currentPos.x - startPos.x)
-    const height = Math.abs(currentPos.y - startPos.y)
+    const scaleX = rect.width / frameSize.width
+    const scaleY = rect.height / frameSize.height
 
-    ctx.strokeStyle = '#3b82f6'
-    ctx.lineWidth = 2
-    ctx.strokeRect(x, y, width, height)
+    setShapes(
+      shapes.map((shape) => {
+        if (shape.id !== touchState.shapeId) return shape
 
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.1)'
-    ctx.fillRect(x, y, width, height)
+        if (touchState.type === 'move') {
+          return {
+            ...shape,
+            x: Math.max(0, Math.min(shape.x + deltaX / scaleX, frameSize.width - shape.width)),
+            y: Math.max(0, Math.min(shape.y + deltaY / scaleY, frameSize.height - shape.height)),
+          }
+        } else {
+          // resize
+          const newWidth = Math.max(20, touchState.startWidth + deltaX / scaleX)
+          const newHeight = Math.max(20, touchState.startHeight + deltaY / scaleY)
+          return {
+            ...shape,
+            width: newWidth,
+            height: newHeight,
+          }
+        }
+      })
+    )
   }
 
-  const handleMouseUp = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault()
-    if (!isDrawing) {
-      setIsDrawing(false)
-      return
-    }
+  const handleMouseUp = () => {
+    setTouchState(null)
+  }
 
-    const currentPos = getPointerPos(e)
-    const x = Math.min(startPos.x, currentPos.x)
-    const y = Math.min(startPos.y, currentPos.y)
-    const width = Math.abs(currentPos.x - startPos.x)
-    const height = Math.abs(currentPos.y - startPos.y)
+  const getBoundingBox = (): Shape | null => {
+    if (shapes.length === 0) return null
 
-    if (width >= 10 && height >= 10) {
-      setBlurArea({ x, y, width, height })
-      console.log('Area selected:', { x, y, width, height })
-    }
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
 
-    setIsDrawing(false)
+    shapes.forEach((shape) => {
+      minX = Math.min(minX, shape.x)
+      minY = Math.min(minY, shape.y)
+      maxX = Math.max(maxX, shape.x + shape.width)
+      maxY = Math.max(maxY, shape.y + shape.height)
+    })
 
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d')
-      if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    return {
+      id: 'bbox',
+      type: 'rect',
+      x: Math.max(0, minX),
+      y: Math.max(0, minY),
+      width: Math.min(frameSize.width - minX, maxX - minX),
+      height: Math.min(frameSize.height - minY, maxY - minY),
     }
   }
 
   const processVideo = async () => {
-    console.log('Process video called:', { videoFile: !!videoFile, blurArea: !!blurArea, ffmpegLoaded: ffmpeg.loaded })
-    
-    if (!videoFile || !blurArea || !ffmpeg.loaded) {
-      const reason = !videoFile ? '動画未選択' : !blurArea ? '領域未選択' : 'FFmpeg未初期化'
+    console.log('Process video called:', { videoFile: !!videoFile, shapes: shapes.length, ffmpegLoaded: ffmpeg.loaded })
+
+    if (!videoFile || shapes.length === 0 || !ffmpeg.loaded) {
+      const reason = !videoFile ? '動画未選択' : shapes.length === 0 ? '領域未追加' : 'FFmpeg未初期化'
       console.error('Validation failed:', reason)
-      alert(`${reason}\n動画を選択して、ぼかす領域を指定してください`)
+      alert(`${reason}\n形を追加して領域を指定してください`)
       return
     }
 
@@ -250,9 +263,13 @@ function App() {
 
       setProgress(20)
 
-      console.log('Preparing FFmpeg filter...')
+      const bbox = getBoundingBox()
+      if (!bbox) {
+        throw new Error('Bounding box calculation failed')
+      }
+
+      console.log('Bounding box:', bbox)
       const blurSize = Math.max(2, Math.ceil((blurStrength / 100) * 50))
-      console.log(`Blur size: ${blurSize} (strength: ${blurStrength}%)`)
 
       setProgress(40)
 
@@ -281,7 +298,6 @@ function App() {
 
       console.log('Downloading file...')
 
-      // iOS Safari 対応
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
 
       if (isIOS) {
@@ -345,7 +361,7 @@ function App() {
   // ========== Render: Main Screen ==========
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-10 text-center">
           <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-2">
@@ -367,61 +383,120 @@ function App() {
             }}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-500 file:to-blue-600 file:text-white hover:file:from-blue-600 hover:file:to-blue-700 cursor-pointer"
           />
-          {videoFile && (
-            <p className="mt-2 text-sm text-gray-600">✓ {videoFile.name}</p>
-          )}
+          {videoFile && <p className="mt-2 text-sm text-gray-600">✓ {videoFile.name}</p>}
         </div>
 
-        {/* Frame Preview & Area Selection */}
+        {/* Frame Preview */}
         {frameImage && (
           <>
             <div className="mb-8">
               <label className="block text-sm font-semibold text-gray-700 mb-3">ぼかす領域を選択</label>
-              <p className="text-xs text-gray-500 mb-3">
-                動画の1フレーム目上をドラッグして、ぼかしたい領域を指定してください
-              </p>
 
-              <div
-                ref={containerRef}
-                className="relative bg-black rounded-lg overflow-hidden shadow-lg"
-                style={{ touchAction: 'none' }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={() => setIsDrawing(false)}
-                onTouchStart={handleMouseDown}
-                onTouchMove={handleMouseMove}
-                onTouchEnd={handleMouseUp}
-              >
-                <img
-                  src={frameImage}
-                  alt="First frame"
-                  className="w-full h-auto block"
-                  onLoad={handleCanvasLoad}
-                />
+              <div ref={containerRef} className="relative bg-black rounded-lg overflow-hidden shadow-lg mb-4">
+                <img src={frameImage} alt="First frame" className="w-full h-auto block" />
 
-                <canvas
-                  ref={canvasRef}
-                  className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-                  style={{ pointerEvents: 'auto', touchAction: 'none' }}
-                />
+                {/* SVG Overlay */}
+                <svg
+                  ref={svgRef}
+                  className="absolute top-0 left-0 w-full h-full"
+                  style={{ pointerEvents: shapes.length > 0 ? 'auto' : 'none' }}
+                  onMouseMove={handleMouseMove}
+                  onTouchMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onTouchEnd={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                >
+                  {shapes.map((shape) => {
+                    const rect = containerRef.current?.getBoundingClientRect()
+                    const scaleX = (rect?.width || 0) / frameSize.width
+                    const scaleY = (rect?.height || 0) / frameSize.height
 
-                {blurArea && (
-                  <div
-                    className="absolute border-2 border-yellow-400 pointer-events-none"
-                    style={{
-                      left: `${(blurArea.x / (canvasRef.current?.width || 1)) * 100}%`,
-                      top: `${(blurArea.y / (canvasRef.current?.height || 1)) * 100}%`,
-                      width: `${(blurArea.width / (canvasRef.current?.width || 1)) * 100}%`,
-                      height: `${(blurArea.height / (canvasRef.current?.height || 1)) * 100}%`,
-                      backgroundColor: 'rgba(250, 204, 21, 0.1)',
-                    }}
-                  />
-                )}
+                    return (
+                      <g key={shape.id}>
+                        {shape.type === 'circle' ? (
+                          <circle
+                            cx={(shape.x + shape.width / 2) * scaleX}
+                            cy={(shape.y + shape.height / 2) * scaleY}
+                            r={(shape.width / 2) * scaleX}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="2"
+                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            style={{ cursor: 'move' }}
+                          />
+                        ) : (
+                          <rect
+                            x={shape.x * scaleX}
+                            y={shape.y * scaleY}
+                            width={shape.width * scaleX}
+                            height={shape.height * scaleY}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="2"
+                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'move')}
+                            style={{ cursor: 'move' }}
+                          />
+                        )}
+
+                        {/* Resize Handle (bottom-right corner) */}
+                        <circle
+                          cx={(shape.x + shape.width) * scaleX}
+                          cy={(shape.y + shape.height) * scaleY}
+                          r="8"
+                          fill="#fbbf24"
+                          stroke="#f59e0b"
+                          strokeWidth="1"
+                          onMouseDown={(e) => handleShapeMouseDown(e, shape.id, 'resize')}
+                          onTouchStart={(e) => handleShapeMouseDown(e, shape.id, 'resize')}
+                          style={{ cursor: 'nwse-resize' }}
+                        />
+                      </g>
+                    )
+                  })}
+                </svg>
               </div>
 
-              {blurArea && (
-                <p className="mt-2 text-sm text-green-600 font-medium">✓ 領域を選択しました</p>
+              {/* Shape Controls */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => addShape('circle')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition"
+                >
+                  + 丸を追加
+                </button>
+                <button
+                  onClick={() => addShape('rect')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition"
+                >
+                  + 四角を追加
+                </button>
+              </div>
+
+              {/* Shape List */}
+              {shapes.length > 0 && (
+                <div className="bg-gray-100 rounded-lg p-4 mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">{shapes.length}個の領域を追加</p>
+                  <div className="space-y-2">
+                    {shapes.map((shape) => (
+                      <div
+                        key={shape.id}
+                        className="flex justify-between items-center bg-white p-2 rounded border border-gray-200"
+                      >
+                        <span className="text-sm text-gray-600">
+                          {shape.type === 'circle' ? '●' : '■'} {Math.round(shape.width)}x{Math.round(shape.height)}
+                        </span>
+                        <button
+                          onClick={() => deleteShape(shape.id)}
+                          className="text-red-500 hover:text-red-700 font-semibold text-sm"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -460,9 +535,9 @@ function App() {
 
               <button
                 onClick={processVideo}
-                disabled={isProcessing || !blurArea}
+                disabled={isProcessing || shapes.length === 0}
                 className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-300 ${
-                  isProcessing || !blurArea
+                  isProcessing || shapes.length === 0
                     ? 'bg-gray-300 cursor-not-allowed'
                     : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:shadow-lg hover:from-blue-600 hover:to-blue-700'
                 }`}
